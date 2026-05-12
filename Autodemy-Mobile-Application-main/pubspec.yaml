@@ -37,6 +37,7 @@ dependencies:
   hive_flutter: ^1.1.0
   screen_protector: ^1.5.1
   //test
+  //test
 
 dev_dependencies:
   flutter_test:

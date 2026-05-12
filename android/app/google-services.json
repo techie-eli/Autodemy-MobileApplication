@@ -1,0 +1,30 @@
+{
+  "project_info": {
+    "project_number": "449750561021",
+    "firebase_url": "https://autodemy-test-database-default-rtdb.asia-southeast1.firebasedatabase.app",
+    "project_id": "autodemy-test-database",
+    "storage_bucket": "autodemy-test-database.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:449750561021:android:5225378deff0c9aac5ce94",
+        "android_client_info": {
+          "package_name": "com.example.autodemy"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCiIvgTExeJ1Bbwc1L4tdnjMSpQRXuoqhQ"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
