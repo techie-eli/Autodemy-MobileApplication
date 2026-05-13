@@ -36,6 +36,8 @@ dependencies:
   hive: ^2.2.3
   hive_flutter: ^1.1.0
   screen_protector: ^1.5.1
+  webauthn: ^0.2.5
+  universal_html: ^2.3.0
 
 dev_dependencies:
   flutter_test:

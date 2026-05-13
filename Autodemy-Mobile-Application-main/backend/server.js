@@ -81,6 +81,10 @@ const Section = require('./models/Section');
 const AcademicYear = require('./models/AcademicYear');
 const Concern = require('./models/Concern');
 const Message = require('./models/Message');
+const StudentWebAuthnCredential = require('./models/StudentWebAuthnCredential');
+
+// Routes
+const studentWebAuthnRoutes = require('./routes/studentWebAuthn');
 
 // New Announcement Model
 const announcementSchema = new mongoose.Schema({
@@ -208,6 +212,9 @@ io.on('connection', (socket) => {
 
 // Routes
 app.get('/', (req, res) => res.send('Autodemy API is running...'));
+
+// Student WebAuthn Routes (for web QR generation authentication)
+app.use('/api/student-webauthn', studentWebAuthnRoutes);
 
 // Auth Route
 app.post('/api/auth/register', async (req, res) => {
