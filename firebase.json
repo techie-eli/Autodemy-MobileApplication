@@ -1,0 +1,39 @@
+{
+  "flutter": {
+    "platforms": {
+      "android": {
+        "default": {
+          "projectId": "autodemy-test-database",
+          "appId": "1:449750561021:android:5225378deff0c9aac5ce94",
+          "fileOutput": "android/app/google-services.json"
+        }
+      },
+      "dart": {
+        "lib/firebase_options.dart": {
+          "projectId": "autodemy-test-database",
+          "configurations": {
+            "android": "1:449750561021:android:5225378deff0c9aac5ce94",
+            "ios": "1:449750561021:ios:242be7f43da9bf6fc5ce94",
+            "macos": "1:449750561021:ios:242be7f43da9bf6fc5ce94",
+            "web": "1:449750561021:web:88e000da6a7658f3c5ce94",
+            "windows": "1:449750561021:web:d54d1a96a6ac8519c5ce94"
+          }
+        }
+      }
+    }
+  },
+  "hosting": {
+    "public": "build/web",
+    "ignore": [
+      "firebase.json",
+      "**/.*",
+      "**/node_modules/**"
+    ],
+    "rewrites": [
+      {
+        "source": "**",
+        "destination": "/index.html"
+      }
+    ]
+  }
+}
