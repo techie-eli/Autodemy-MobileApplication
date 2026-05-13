@@ -13,7 +13,22 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - run: flutter build web --release
+
+      # 1. Setup Flutter environment
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+
+      # 2. Install your project dependencies
+      - name: Install Dependencies
+        run: flutter pub get
+
+      # 3. Build the web version
+      - name: Build Web
+        run: flutter build web --release
+
+      # 4. Deploy the preview to Firebase
       - uses: FirebaseExtended/action-hosting-deploy@v0
         with:
           repoToken: ${{ secrets.GITHUB_TOKEN }}
