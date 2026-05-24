@@ -72,7 +72,6 @@ class AttendanceService {
       _startCodeRefreshTimer(sessionId);
     } catch (e) {
       // Firestore errors are non-fatal — the MongoDB backend is the source of truth.
-      // The session can still function with manual overrides even if Firestore fails.
       print('Firestore session setup warning: $e');
     }
   }
@@ -123,11 +122,9 @@ class AttendanceService {
       );
       if (!success) {
         print('AUTODEMY: Backend sync returned false. Might be server error.');
-        // Optionally queue it anyway if we suspect it's a network glitch not caught by connectivity
       }
     } catch (e) {
       if (e is SocketException || e.toString().contains('Failed host lookup')) {
-        // We are likely offline despite connectivity check, queue it!
         await OfflineService.queueAttendance(
           studentName: studentName,
           subject: subject,
@@ -146,7 +143,7 @@ class AttendanceService {
     }
 
     final data = sessionDoc.data()!;
-    final startTime = (data['startTime'] as Timestamp).toDate();
+    final startTime = (data['startTime'] as Timestamp).toDate().toLocal(); // FIX: .toLocal()
     final lateThreshold = data['lateThresholdMinutes'] as int;
     final absentThreshold = data['absentThresholdMinutes'] as int;
     
@@ -167,7 +164,6 @@ class AttendanceService {
         'timestamp': FieldValue.serverTimestamp(),
       }, SetOptions(merge: true));
 
-      // Trigger local notification for the user
       NotificationService.showLocalNotification(
         'Attendance Recorded',
         'You have successfully marked attendance for $subject - $section as ${status.toUpperCase()}.',
@@ -200,7 +196,7 @@ class AttendanceService {
     final sessionDoc = await _db.collection('Sessions').doc(sessionId).get();
     if (sessionDoc.exists) {
       final data = sessionDoc.data()!;
-      final startTime = (data['startTime'] as Timestamp).toDate();
+      final startTime = (data['startTime'] as Timestamp).toDate().toLocal(); // FIX: .toLocal()
       final lateThreshold = data['lateThresholdMinutes'] ?? 5;
       final absentThreshold = data['absentThresholdMinutes'] ?? 10;
       
@@ -231,12 +227,12 @@ class AttendanceService {
     return _db.collection('Sessions').doc(sessionId).snapshots().map((snapshot) {
       if (!snapshot.exists || snapshot.data()?['isActive'] != true) return null;
       final data = snapshot.data()!;
-      if (data['startTime'] == null) return null; // Wait for server timestamp
+      if (data['startTime'] == null) return null;
       
       return ActiveSessionInfo(
         subject: data['subject'],
         section: data['section'],
-        startTimestamp: (data['startTime'] as Timestamp).toDate().millisecondsSinceEpoch,
+        startTimestamp: (data['startTime'] as Timestamp).toDate().toLocal().millisecondsSinceEpoch, // FIX: .toLocal()
         lateThresholdMinutes: data['lateThresholdMinutes'] ?? 5,
         absentThresholdMinutes: data['absentThresholdMinutes'] ?? 10,
         sessionCode: data['sessionCode'] ?? '',
@@ -252,8 +248,12 @@ class AttendanceService {
         final data = doc.data();
         String? timeStr;
         if (data['timestamp'] != null) {
-          final dt = (data['timestamp'] as Timestamp).toDate();
-          timeStr = '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
+          // ── FIX 1: added .toLocal() so server UTC converts to device local time (PHT) ──
+          final dt = (data['timestamp'] as Timestamp).toDate().toLocal();
+          final hour = dt.hour % 12 == 0 ? 12 : dt.hour % 12;
+          final minute = dt.minute.toString().padLeft(2, '0');
+          final period = dt.hour >= 12 ? 'PM' : 'AM';
+          timeStr = '$hour:$minute $period';
         }
         return LiveStudentRecord(
           name: data['studentName'] ?? doc.id,
@@ -276,8 +276,12 @@ class AttendanceService {
       final data = snapshot.data()!;
       String? timeStr;
       if (data['timestamp'] != null) {
-        final dt = (data['timestamp'] as Timestamp).toDate();
-        timeStr = '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
+        // ── FIX 2: added .toLocal() so server UTC converts to device local time (PHT) ──
+        final dt = (data['timestamp'] as Timestamp).toDate().toLocal();
+        final hour = dt.hour % 12 == 0 ? 12 : dt.hour % 12;
+        final minute = dt.minute.toString().padLeft(2, '0');
+        final period = dt.hour >= 12 ? 'PM' : 'AM';
+        timeStr = '$hour:$minute $period';
       }
       return LiveStudentRecord(
         name: data['studentName'] ?? snapshot.id,
@@ -296,34 +300,38 @@ class AttendanceService {
   }) async {
     final sessionId = '${subject}_$section';
     
-    // First update the local Firestore to signal session end
     await _db.collection('Sessions').doc(sessionId).update({
       'isActive': false,
       'endTime': FieldValue.serverTimestamp(),
       'endReason': reason,
     });
     
-    // 1. Fetch the latest records DIRECTLY from Firestore to ensure we have the most recent data
+    // 1. Fetch the latest records DIRECTLY from Firestore
     final recordsSnapshot = await _db.collection('Sessions').doc(sessionId).collection('Records').get();
     final List<LiveStudentRecord> latestRecords = recordsSnapshot.docs.map((doc) {
       final data = doc.data();
+      String? timeIsoStr;
+      if (data['timestamp'] != null) {
+        // ── FIX 3: added .toLocal() before .toIso8601String() so stored timein is correct PHT ──
+        final dt = (data['timestamp'] as Timestamp).toDate().toLocal();
+        timeIsoStr = dt.toIso8601String();
+      }
       return LiveStudentRecord(
         name: data['studentName'] ?? doc.id,
         status: data['status'] ?? 'pending',
-        timein: data['timestamp'] != null ? (data['timestamp'] as Timestamp).toDate().toIso8601String() : null,
+        timein: timeIsoStr,
         verified: data['timestamp'] != null,
       );
     }).toList();
 
     // 2. Convert to API format & resolve PENDING to ABSENT
     final formattedRecords = latestRecords.map((r) {
-      // KEEP PRESENT/LATE as is. Only convert PENDING to ABSENT.
       final resolvedStatus = (r.status == 'pending' || r.status.isEmpty) ? 'absent' : r.status;
       return {
         'name': r.name,
         'status': resolvedStatus,
         'timein': r.timein,
-        'timestamp': DateTime.now().toIso8601String(),
+        'timestamp': r.timein ?? DateTime.now().toUtc().toIso8601String(),
       };
     }).toList();
 
@@ -335,14 +343,13 @@ class AttendanceService {
       reason: reason,
     );
 
-    // 3. Clear Firestore session (Cleanup)
+    // 4. Clear Firestore session (Cleanup)
     final recordsRef = _db.collection('Sessions').doc(sessionId).collection('Records');
     final docs = await recordsRef.get();
     for (var doc in docs.docs) {
       await doc.reference.delete();
     }
     
-    // Return summary count (based on resolved statuses)
     int p = latestRecords.where((r) => r.status == 'present').length;
     int l = latestRecords.where((r) => r.status == 'late').length;
     int a = latestRecords.where((r) => r.status == 'pending' || r.status == 'absent').length;
@@ -362,7 +369,6 @@ class AttendanceService {
     });
   }
 
-  // Helper to get active session data for verification
   static Future<Map<String, dynamic>?> getActiveSession(String subject, String section) async {
     final sessionId = '${subject}_$section';
     final doc = await _db.collection('Sessions').doc(sessionId).get();
