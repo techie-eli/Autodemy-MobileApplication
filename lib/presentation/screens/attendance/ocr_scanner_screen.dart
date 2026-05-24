@@ -23,6 +23,27 @@ class _OCRScannerScreenState extends State<OCRScannerScreen> {
     super.dispose();
   }
 
+  // Normalize name: remove punctuation, lowercase, sort words alphabetically
+  String normalizeName(String name) {
+    List<String> parts = name
+        .replaceAll(RegExp(r'[^a-zA-Z\s]'), '') // removes commas, periods, Jr, etc.
+        .trim()
+        .toLowerCase()
+        .split(RegExp(r'\s+'));
+    parts.sort(); // order won't matter anymore
+    return parts.join(' ');
+  }
+
+  // Jaccard similarity: compares word sets regardless of order
+  double similarityScore(String a, String b) {
+    final setA = a.split(' ').toSet();
+    final setB = b.split(' ').toSet();
+    final intersection = setA.intersection(setB).length;
+    final union = setA.union(setB).length;
+    if (union == 0) return 0.0;
+    return intersection / union;
+  }
+
   Future<void> _pickAndProcessImage() async {
     final picker = ImagePicker();
     final pickedFile = await picker.pickImage(source: ImageSource.camera);
@@ -36,25 +57,20 @@ class _OCRScannerScreenState extends State<OCRScannerScreen> {
       try {
         final inputImage = InputImage.fromFile(_image!);
         final recognizedText = await _textRecognizer.processImage(inputImage);
-        
+
         String? matchedName;
-        final fullText = recognizedText.text.toUpperCase();
+        double bestScore = 0.0;
+        const double threshold = 0.5; // adjust if too strict or too loose
+
+        final normalizedScan = normalizeName(recognizedText.text);
 
         for (String name in widget.studentNames) {
-          final upperName = name.toUpperCase();
-          // Check for exact name or components of the name (e.g. Surname)
-          final parts = upperName.split(',');
-          bool match = false;
-          if (fullText.contains(upperName)) {
-            match = true;
-          } else if (parts.isNotEmpty && fullText.contains(parts[0].trim())) {
-             // If surname matches, it's a strong candidate
-             match = true;
-          }
+          final normalizedName = normalizeName(name);
+          final score = similarityScore(normalizedScan, normalizedName);
 
-          if (match) {
+          if (score > bestScore && score >= threshold) {
+            bestScore = score;
             matchedName = name;
-            break;
           }
         }
 
@@ -126,16 +142,16 @@ class _OCRScannerScreenState extends State<OCRScannerScreen> {
                   borderRadius: BorderRadius.circular(24),
                   border: Border.all(color: Colors.grey.shade300, width: 2, style: BorderStyle.solid),
                 ),
-                child: _image != null 
-                  ? ClipRRect(borderRadius: BorderRadius.circular(22), child: Image.file(_image!, fit: BoxFit.cover))
-                  : Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(Icons.badge_outlined, size: 80, color: Colors.grey.shade400),
-                        const SizedBox(height: 16),
-                        const Text('Position the ID card within frame', style: TextStyle(color: Colors.grey)),
-                      ],
-                    ),
+                child: _image != null
+                    ? ClipRRect(borderRadius: BorderRadius.circular(22), child: Image.file(_image!, fit: BoxFit.cover))
+                    : Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.badge_outlined, size: 80, color: Colors.grey.shade400),
+                          const SizedBox(height: 16),
+                          const Text('Position the ID card within frame', style: TextStyle(color: Colors.grey)),
+                        ],
+                      ),
               ),
               const SizedBox(height: 40),
               if (_isProcessing)
@@ -167,3 +183,7 @@ class _OCRScannerScreenState extends State<OCRScannerScreen> {
     );
   }
 }
+
+
+
+
