@@ -647,6 +647,24 @@ class ApiService {
       return null;
     }
   }
+static Future<Map<String, dynamic>> postEndSession({
+  required String subject,
+  required String section,
+  required List<Map<String, dynamic>> records,
+  required String endReason,
+}) async {
+  final response = await http.post(
+    Uri.parse('$baseUrl/attendance/end'),
+    headers: {'Content-Type': 'application/json'},
+    body: jsonEncode({
+      'subject': subject,
+      'section': section,
+      'records': records,
+      'endReason': endReason, // Pass to server.js
+    }),
+  );
+  return jsonDecode(response.body);
+}
 
   static Future<List<dynamic>> getGranularAttendance({
     String? year,
@@ -672,8 +690,10 @@ class ApiService {
       print('Granular Attendance Error: $e');
       return [];
     }
+    
   }
 }
+
 
 class _UserProxy {
   final Map<String, dynamic>? _data;

@@ -28,17 +28,17 @@ class _OCRScannerScreenState extends State<OCRScannerScreen> {
   // FIX 1: Strip numbers, single letters (initials like "B."),
   // short noise words, and ID numbers before matching.
   // ─────────────────────────────────────────────────────────────
-  String normalizeName(String name) {
-    return name
-        .replaceAll(RegExp(r'[^a-zA-Z\s]'), ' ') // remove punctuation & numbers
-        .trim()
-        .toLowerCase()
-        .split(RegExp(r'\s+'))
-        .where((w) => w.length > 1) // FIX: drop single-letter initials (e.g. "b")
-        .toList()
-        ..sort(); // sort so word order doesn't matter
-    // join after sort
-  }
+String normalizeName(String name) {
+  final parts = name
+      .replaceAll(RegExp(r'[^a-zA-Z\s]'), ' ')
+      .trim()
+      .toLowerCase()
+      .split(RegExp(r'\s+'))
+      .where((w) => w.length > 1)
+      .toList();
+  parts.sort();
+  return parts.join(' ');
+}
 
   String normalizeNameStr(String name) {
     final parts = name

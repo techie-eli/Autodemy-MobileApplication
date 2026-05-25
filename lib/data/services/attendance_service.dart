@@ -288,7 +288,7 @@ class AttendanceService {
     });
   }
 
-  static Future<Map<String, int>> endSession({
+static Future<Map<String, int>> endSession({
     required String subject,
     required String section,
     required List<LiveStudentRecord> records,
@@ -296,15 +296,16 @@ class AttendanceService {
   }) async {
     final sessionId = '${subject}_$section';
     
-    // First update the local Firestore to signal session end
+    // 1. Signal session end in Firestore and ATTACH THE REASON
     await _db.collection('Sessions').doc(sessionId).update({
       'isActive': false,
       'endTime': FieldValue.serverTimestamp(),
-      'endReason': reason,
+      'endReason': reason, // Stores if it was Emergency/Early/Finished
     });
     
-    // 1. Fetch the latest records DIRECTLY from Firestore to ensure we have the most recent data
+    // 2. Fetch the latest records DIRECTLY from Firestore
     final recordsSnapshot = await _db.collection('Sessions').doc(sessionId).collection('Records').get();
+    
     final List<LiveStudentRecord> latestRecords = recordsSnapshot.docs.map((doc) {
       final data = doc.data();
       return LiveStudentRecord(
@@ -315,19 +316,21 @@ class AttendanceService {
       );
     }).toList();
 
-    // 2. Convert to API format & resolve PENDING to ABSENT
+    // 3. Convert to API format & resolve PENDING to ABSENT
     final formattedRecords = latestRecords.map((r) {
-      // KEEP PRESENT/LATE as is. Only convert PENDING to ABSENT.
       final resolvedStatus = (r.status == 'pending' || r.status.isEmpty) ? 'absent' : r.status;
       return {
         'name': r.name,
         'status': resolvedStatus,
         'timein': r.timein,
         'timestamp': DateTime.now().toIso8601String(),
+        // Add a tag to the individual record if class ended abnormally
+        'tag': (reason == 'Finished') ? 'Normal' : 'Special: $reason', 
       };
     }).toList();
 
-    // 3. Send to MongoDB (Permanent Record)
+    // 4. Send to MongoDB (Permanent Record) via ApiService
+    // Ensure your ApiService.endSession supports the 'reason' parameter
     await ApiService.endSession(
       subject: subject,
       section: section,
@@ -335,14 +338,14 @@ class AttendanceService {
       reason: reason,
     );
 
-    // 3. Clear Firestore session (Cleanup)
+    // 5. Clear Firestore session (Cleanup)
     final recordsRef = _db.collection('Sessions').doc(sessionId).collection('Records');
     final docs = await recordsRef.get();
     for (var doc in docs.docs) {
       await doc.reference.delete();
     }
     
-    // Return summary count (based on resolved statuses)
+    // Return summary count
     int p = latestRecords.where((r) => r.status == 'present').length;
     int l = latestRecords.where((r) => r.status == 'late').length;
     int a = latestRecords.where((r) => r.status == 'pending' || r.status == 'absent').length;
