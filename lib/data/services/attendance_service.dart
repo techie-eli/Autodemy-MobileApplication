@@ -292,7 +292,7 @@ class AttendanceService {
     });
   }
 
-  static Future<Map<String, int>> endSession({
+static Future<Map<String, int>> endSession({
     required String subject,
     required String section,
     required List<LiveStudentRecord> records,
@@ -300,18 +300,22 @@ class AttendanceService {
   }) async {
     final sessionId = '${subject}_$section';
 
+
     await _db.collection('Sessions').doc(sessionId).update({
       'isActive': false,
       'endTime': FieldValue.serverTimestamp(),
-      'endReason': reason,
+      'endReason': reason, // Stores if it was Emergency/Early/Finished
     });
-
+    
+    // 1. Fetch the latest records DIRECTLY from Firestore
     final recordsSnapshot = await _db.collection('Sessions').doc(sessionId).collection('Records').get();
-
+    
     final List<LiveStudentRecord> latestRecords = recordsSnapshot.docs.map((doc) {
       final data = doc.data();
       String? timeIsoStr;
       if (data['timestamp'] != null) {
+        // ── FIX 3: send UTC ISO string (ends in Z) to server — server stores UTC,
+        // history route returns UTC+Z, Flutter .toLocal() converts to PHT correctly
         final dt = (data['timestamp'] as Timestamp).toDate().toUtc();
         timeIsoStr = dt.toIso8601String();
       }
@@ -323,6 +327,7 @@ class AttendanceService {
       );
     }).toList();
 
+    // 3. Convert to API format & resolve PENDING to ABSENT
     final formattedRecords = latestRecords.map((r) {
       final resolvedStatus = (r.status == 'pending' || r.status.isEmpty) ? 'absent' : r.status;
       return {
@@ -333,6 +338,8 @@ class AttendanceService {
       };
     }).toList();
 
+    // 4. Send to MongoDB (Permanent Record) via ApiService
+    // Ensure your ApiService.endSession supports the 'reason' parameter
     await ApiService.endSession(
       subject: subject,
       section: section,
@@ -340,16 +347,17 @@ class AttendanceService {
       reason: reason,
     );
 
+    // 4. Clear Firestore session (Cleanup)
     final recordsRef = _db.collection('Sessions').doc(sessionId).collection('Records');
     final docs = await recordsRef.get();
     for (var doc in docs.docs) {
       await doc.reference.delete();
     }
-
+    
     int p = latestRecords.where((r) => r.status == 'present').length;
     int l = latestRecords.where((r) => r.status == 'late').length;
     int a = latestRecords.where((r) => r.status == 'pending' || r.status == 'absent').length;
-
+    
     return {'present': p, 'late': l, 'absent': a};
   }
 
