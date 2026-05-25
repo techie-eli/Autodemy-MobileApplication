@@ -249,7 +249,7 @@ class AttendanceService {
         String? timeStr;
         if (data['timestamp'] != null) {
           // ── FIX 1: added .toLocal() so server UTC converts to device local time (PHT) ──
-          final dt = (data['timestamp'] as Timestamp).toDate().toLocal();
+          final dt = (data['timestamp'] as Timestamp).toDate().toUtc();
           final hour = dt.hour % 12 == 0 ? 12 : dt.hour % 12;
           final minute = dt.minute.toString().padLeft(2, '0');
           final period = dt.hour >= 12 ? 'PM' : 'AM';
@@ -277,7 +277,7 @@ class AttendanceService {
       String? timeStr;
       if (data['timestamp'] != null) {
         // ── FIX 2: added .toLocal() so server UTC converts to device local time (PHT) ──
-        final dt = (data['timestamp'] as Timestamp).toDate().toLocal();
+        final dt = (data['timestamp'] as Timestamp).toDate().toUtc();
         final hour = dt.hour % 12 == 0 ? 12 : dt.hour % 12;
         final minute = dt.minute.toString().padLeft(2, '0');
         final period = dt.hour >= 12 ? 'PM' : 'AM';
@@ -312,8 +312,9 @@ class AttendanceService {
       final data = doc.data();
       String? timeIsoStr;
       if (data['timestamp'] != null) {
-        // ── FIX 3: added .toLocal() before .toIso8601String() so stored timein is correct PHT ──
-        final dt = (data['timestamp'] as Timestamp).toDate().toLocal();
+        // ── FIX 3: send UTC ISO string (ends in Z) to server — server stores UTC,
+        // history route returns UTC+Z, Flutter .toLocal() converts to PHT correctly
+        final dt = (data['timestamp'] as Timestamp).toDate().toUtc();
         timeIsoStr = dt.toIso8601String();
       }
       return LiveStudentRecord(
